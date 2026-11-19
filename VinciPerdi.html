@@ -1,0 +1,1283 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="theme-color" content="#0f2219">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Vinci Perdi">
+<link rel="manifest" id="pwa-manifest">
+<script>
+// Inietta manifest inline
+const manifest = {
+  name: "Vinci Perdi",
+  short_name: "VinciPerdi",
+  description: "Il gioco di carte dove vincere fa perdere",
+  start_url: ".",
+  display: "standalone",
+  background_color: "#0f2219",
+  theme_color: "#0f2219",
+  orientation: "portrait",
+  icons: [{
+    src: "data:image/svg+xml," + encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='32' fill='%230f2219'/><text x='96' y='130' font-size='110' text-anchor='middle'>🃏</text></svg>`),
+    sizes: "192x192", type: "image/svg+xml", purpose: "any maskable"
+  }]
+};
+const blob = new Blob([JSON.stringify(manifest)], {type:'application/json'});
+document.getElementById('pwa-manifest').href = URL.createObjectURL(blob);
+// Service Worker per offline
+if ('serviceWorker' in navigator) {
+  const swCode = `
+    const CACHE = 'vp-v1';
+    self.addEventListener('install', e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(['.']))));
+    self.addEventListener('fetch', e => e.respondWith(caches.match(e.request).then(r => r || fetch(e.request))));
+  `;
+  const swBlob = new Blob([swCode], {type:'application/javascript'});
+  navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(()=>{});
+}
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vinci Perdi</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;500;600&display=swap');
+:root {
+  --felt: #0f2219;
+  --felt2: #1a3a2a;
+  --gold: #c9a84c;
+  --gold2: #e2c97e;
+  --goldm: #8a6d2a;
+  --red: #e74c3c;
+  --orange: #e67e22;
+  --green: #27ae60;
+  --greenl: #7dcc9e;
+  --cream: #f5f0e8;
+  --r: 10px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--felt);
+  min-height: 100vh;
+  color: var(--cream);
+  padding: 0 0 40px 0;
+}
+
+/* screens */
+.screen { display: none; min-height: 100vh; padding: 16px 12px; flex-direction: column; align-items: center; }
+.screen.on { display: flex; }
+
+/* logo */
+.logo { font-family: 'Playfair Display', serif; font-weight: 900; font-size: 2.4rem; color: var(--gold); text-align: center; margin-bottom: 4px; }
+.logo em { color: var(--cream); font-style: normal; }
+.sub { font-size: .72rem; color: var(--goldm); letter-spacing: .18em; text-transform: uppercase; text-align: center; margin-bottom: 24px; }
+
+/* panel */
+.box { background: rgba(255,255,255,.05); border: 1px solid rgba(201,168,76,.22); border-radius: var(--r); padding: 16px; width: 100%; max-width: 500px; margin-bottom: 14px; }
+.box h2 { font-family: 'Playfair Display', serif; color: var(--gold2); font-size: 1rem; margin-bottom: 12px; }
+
+/* inputs */
+input[type=text], input[type=number] {
+  background: rgba(0,0,0,.35); border: 1px solid rgba(201,168,76,.3);
+  border-radius: 6px; color: var(--cream); padding: 9px 12px;
+  font-size: .92rem; font-family: inherit; outline: none; width: 100%;
+}
+input:focus { border-color: var(--gold); }
+.num-input { width: 76px !important; text-align: center; }
+
+/* buttons */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 10px 20px; border-radius: 6px; border: none;
+  font-family: inherit; font-size: .92rem; font-weight: 600;
+  cursor: pointer; transition: filter .15s, transform .15s;
+  white-space: nowrap; text-align: center;
+}
+.btn:active { transform: scale(.97); }
+.gold  { background: linear-gradient(135deg, var(--gold), var(--goldm)); color: #0f2219; }
+.out   { background: transparent; border: 1px solid rgba(201,168,76,.4); color: var(--gold2); }
+.red   { background: rgba(192,57,43,.2); border: 1px solid rgba(192,57,43,.5); color: #f99; }
+.grn   { background: rgba(39,174,96,.2); border: 1px solid rgba(39,174,96,.4); color: var(--greenl); }
+.sm    { padding: 6px 13px; font-size: .8rem; }
+.btn:disabled { opacity: .35; cursor: default; transform: none; }
+.w100  { width: 100%; max-width: 500px; }
+
+/* player row setup */
+.prow { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+.prow input { flex: 1; }
+.pnum { font-size: .7rem; color: var(--goldm); min-width: 18px; text-align: right; }
+
+/* row of buttons */
+.brow { display: flex; gap: 9px; flex-wrap: wrap; justify-content: center; margin-bottom: 10px; }
+
+/* tabs */
+.tabs { display: flex; width: 100%; max-width: 500px; background: rgba(0,0,0,.3); border: 1px solid rgba(201,168,76,.18); border-radius: 8px; overflow: hidden; margin-bottom: 14px; }
+.tab { flex: 1; padding: 9px 4px; text-align: center; font-size: .75rem; font-weight: 600; cursor: pointer; color: rgba(255,255,255,.4); border: none; background: transparent; font-family: inherit; transition: all .15s; }
+.tab.on { color: var(--gold2); background: rgba(201,168,76,.12); }
+
+/* pot banner */
+.pot-banner { width: 100%; max-width: 500px; background: rgba(201,168,76,.1); border: 1px solid rgba(201,168,76,.3); border-radius: var(--r); padding: 14px 16px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+.pot-big { font-family: 'Playfair Display', serif; font-weight: 900; font-size: 2.4rem; color: var(--gold); }
+.pot-label { font-size: .68rem; color: var(--goldm); letter-spacing: .12em; text-transform: uppercase; margin-bottom: 2px; }
+.pot-info { font-size: .73rem; color: rgba(255,255,255,.35); margin-top: 3px; }
+
+/* table */
+.tbl-wrap { width: 100%; max-width: 500px; background: rgba(0,0,0,.28); border: 1px solid rgba(201,168,76,.16); border-radius: var(--r); overflow: hidden; margin-bottom: 13px; }
+table { width: 100%; border-collapse: collapse; }
+th { font-size: .63rem; letter-spacing: .08em; text-transform: uppercase; color: var(--goldm); padding: 7px 9px; text-align: left; background: rgba(0,0,0,.2); }
+td { padding: 9px 9px; font-size: .86rem; border-top: 1px solid rgba(255,255,255,.05); vertical-align: middle; }
+.safe { color: var(--greenl); font-weight: 700; font-family: 'Playfair Display', serif; }
+.warn { color: var(--orange); font-weight: 700; font-family: 'Playfair Display', serif; }
+.dang { color: var(--red); font-weight: 700; font-family: 'Playfair Display', serif; }
+.muted { color: rgba(255,255,255,.35); font-size: .78rem; }
+.row-out { opacity: .38; text-decoration: line-through; }
+.row-dang { background: rgba(192,57,43,.1); }
+.row-warn { background: rgba(230,126,34,.07); }
+.bar-cell { width: 70px; }
+.bar-wrap { background: rgba(255,255,255,.08); border-radius: 3px; height: 5px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 3px; }
+
+/* badges */
+.badge { display: inline-block; font-size: .6rem; padding: 1px 6px; border-radius: 9px; margin-left: 4px; }
+.badge-gold { background: rgba(201,168,76,.2); color: var(--gold2); }
+.badge-red  { background: rgba(192,57,43,.3); color: #f99; }
+.badge-grn  { background: rgba(39,174,96,.2); color: var(--greenl); }
+
+/* taker selector */
+.taker-wrap { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }
+.taker-btn {
+  padding: 7px 14px; border-radius: 6px; border: 1px solid rgba(201,168,76,.25);
+  background: rgba(0,0,0,.2); color: var(--cream); font-size: .83rem;
+  cursor: pointer; font-family: inherit; transition: all .15s;
+}
+.taker-btn:hover { border-color: var(--gold); }
+.taker-btn.on { background: rgba(201,168,76,.2); border-color: var(--gold); color: var(--gold2); font-weight: 600; }
+
+/* score grid */
+.sgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; margin-bottom: 10px; }
+.srow { display: flex; align-items: center; gap: 7px; }
+.srow label { flex: 1; font-size: .82rem; color: rgba(255,255,255,.7); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.srow input { width: 70px !important; padding: 7px 9px; }
+.srow-auto { opacity: .6; }
+
+/* total check */
+.tcheck { font-size: .78rem; margin-bottom: 9px; }
+.tcheck.ok { color: var(--greenl); }
+.tcheck.err { color: var(--red); }
+
+/* preview */
+.preview { background: rgba(0,0,0,.18); border: 1px solid rgba(255,255,255,.07); border-radius: 7px; padding: 10px 13px; margin-bottom: 10px; }
+.preview h4 { font-size: .67rem; letter-spacing: .08em; text-transform: uppercase; color: var(--goldm); margin-bottom: 6px; }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip { padding: 3px 9px; border-radius: 15px; font-size: .77rem; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.1); }
+.chip strong { color: var(--gold2); }
+
+/* history */
+.hist-wrap { width: 100%; max-width: 560px; background: rgba(0,0,0,.18); border: 1px solid rgba(255,255,255,.07); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+.hist-wrap summary { cursor: pointer; font-size: .73rem; color: var(--goldm); letter-spacing: .06em; text-transform: uppercase; }
+.hist-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: .75rem; }
+.hist-table th { color: var(--goldm); font-size: .63rem; padding: 3px 5px; text-align: left; border-bottom: 1px solid rgba(255,255,255,.08); }
+.hist-table td { padding: 4px 5px; border-bottom: 1px solid rgba(255,255,255,.04); }
+.hpt { color: var(--gold2); font-weight: 600; }
+.hpt0 { color: rgba(255,255,255,.25); }
+
+/* end screen winners */
+.wsel-wrap { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }
+.wbtn {
+  padding: 7px 14px; border-radius: 6px; border: 1px solid rgba(39,174,96,.3);
+  background: rgba(0,0,0,.2); color: var(--cream); font-size: .83rem;
+  cursor: pointer; font-family: inherit; transition: all .15s;
+}
+.wbtn.on1 { background: rgba(39,174,96,.2); border-color: var(--greenl); color: var(--greenl); font-weight: 600; }
+.wbtn.on2 { background: rgba(201,168,76,.18); border-color: var(--gold); color: var(--gold2); font-weight: 600; }
+
+/* money screen */
+.money-big { font-family: 'Playfair Display', serif; font-weight: 900; font-size: 3rem; color: var(--gold); text-align: center; margin-bottom: 4px; }
+.money-sub { font-size: .72rem; color: var(--goldm); text-align: center; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 18px; }
+.saldo-pos { color: var(--greenl); font-weight: 700; font-family: 'Playfair Display', serif; }
+.saldo-neg { color: var(--red); font-weight: 700; font-family: 'Playfair Display', serif; }
+.saldo-zer { color: rgba(255,255,255,.3); font-weight: 700; font-family: 'Playfair Display', serif; }
+.settle-btn { padding: 4px 10px; font-size: .73rem; border-radius: 5px; border: 1px solid rgba(39,174,96,.4); background: rgba(39,174,96,.1); color: var(--greenl); cursor: pointer; font-family: inherit; }
+.settle-btn.settled { opacity: .4; text-decoration: line-through; cursor: default; }
+
+/* storico */
+.sc { background: rgba(0,0,0,.22); border: 1px solid rgba(255,255,255,.07); border-radius: 8px; padding: 11px 13px; margin-bottom: 8px; width: 100%; max-width: 500px; }
+.sc-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 7px; }
+.sc-num { font-family: 'Playfair Display', serif; color: var(--gold2); font-size: .92rem; }
+.sc-win { font-size: .73rem; color: var(--greenl); }
+.sc-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.sc-chip { padding: 3px 9px; border-radius: 11px; font-size: .75rem; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.1); }
+.sc-chip.w { background: rgba(201,168,76,.18); border-color: rgba(201,168,76,.4); color: var(--gold2); }
+.sc-chip strong { color: var(--cream); }
+.sc-pot { font-size: .68rem; color: rgba(255,255,255,.3); margin-top: 5px; }
+
+/* modal */
+.overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.8); z-index: 200; align-items: center; justify-content: center; padding: 16px; }
+.overlay.on { display: flex; }
+.modal { background: #14271d; border: 1px solid rgba(201,168,76,.3); border-radius: var(--r); padding: 20px; max-width: 450px; width: 100%; max-height: 85vh; overflow-y: auto; }
+.modal h2 { font-family: 'Playfair Display', serif; color: var(--gold2); margin-bottom: 12px; }
+.modal p, .modal li { font-size: .83rem; color: rgba(255,255,255,.72); line-height: 1.6; margin-bottom: 7px; }
+.modal ul { padding-left: 16px; }
+.rs { margin-bottom: 11px; }
+.rs h3 { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--goldm); margin-bottom: 4px; }
+
+/* reentry button inline */
+.reb { padding: 3px 9px; font-size: .71rem; border-radius: 5px; border: 1px solid rgba(192,57,43,.5); background: rgba(192,57,43,.18); color: #f99; cursor: pointer; font-family: inherit; }
+.reb:hover { background: rgba(192,57,43,.35); }
+
+/* toast */
+#toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(120px); background: rgba(10,6,2,.96); border: 1px solid rgba(201,168,76,.4); color: var(--cream); padding: 9px 18px; border-radius: 8px; font-size: .86rem; transition: transform .3s; z-index: 500; max-width: 90vw; text-align: center; white-space: nowrap; }
+#toast.on { transform: translateX(-50%) translateY(0); }
+
+@media (max-width: 380px) { .sgrid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<!-- ═══════════ SETUP ═══════════ -->
+<div id="S-setup" class="screen on">
+  <div style="width:100%;max-width:500px;padding:2px 0 4px">
+    <button class="btn out sm" id="back-setup" onclick="goHome()" style="display:none">← Indietro</button>
+  </div>
+  <div class="logo">Vinci<em> &</em> Perdi</div>
+  <div class="sub">Il gioco dove vincere fa perdere</div>
+
+  <div class="box">
+    <h2>Giocatori</h2>
+    <div id="plist"></div>
+    <div class="brow" style="margin-top:10px">
+      <button class="btn out sm" onclick="addP()">+ Aggiungi</button>
+      <button class="btn out sm" onclick="remP()">− Rimuovi</button>
+    </div>
+  </div>
+
+  <div class="box" style="display:flex;gap:16px;flex-wrap:wrap">
+    <div>
+      <div style="font-size:.78rem;color:var(--goldm);margin-bottom:5px">Limite punti</div>
+      <input type="number" id="cfg-limit" class="num-input" value="40" min="10" max="200">
+    </div>
+    <div>
+      <div style="font-size:.78rem;color:var(--goldm);margin-bottom:5px">Quota (€)</div>
+      <input type="number" id="cfg-buy" class="num-input" value="5" min="1" max="1000">
+    </div>
+    <div>
+      <div style="font-size:.78rem;color:var(--goldm);margin-bottom:5px">Rientri max</div>
+      <input type="number" id="cfg-re" class="num-input" value="2" min="0" max="5">
+    </div>
+  </div>
+
+  <div class="brow">
+    <button class="btn out" onclick="openRules()">Regole</button>
+    <button class="btn out" id="btn-resume" style="display:none" onclick="resumeGame()">▶ Partita in corso</button>
+    <button class="btn gold" onclick="startGame()">▶ Nuova partita</button>
+  </div>
+
+</div>
+
+<!-- ═══════════ HOME ═══════════ -->
+<div id="S-home" class="screen">
+  <div class="logo" style="font-size:1.9rem">Vinci<em> &</em> Perdi</div>
+  <div class="sub" style="margin-bottom:12px" id="home-day-label">Giornata</div>
+
+  <div class="tabs" id="home-tabs">
+    <button class="tab on" onclick="switchTab('giornata')">📅 Giornata</button>
+    <button class="tab"    onclick="switchTab('soldi')">💰 Soldi</button>
+    <button class="tab"    onclick="switchTab('storico')">📋 Storico</button>
+  </div>
+
+  <!-- TAB GIORNATA -->
+  <div id="tab-giornata">
+    <!-- Banner partita in corso -->
+    <div id="inprogress-banner" style="display:none;width:100%;max-width:500px;background:rgba(39,174,96,.1);border:1px solid rgba(39,174,96,.35);border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:.68rem;color:#7dcc9e;letter-spacing:.1em;text-transform:uppercase;margin-bottom:3px">🎴 Partita in corso</div>
+        <div style="font-size:.88rem;color:var(--cream)" id="inprogress-info">Mano 1</div>
+      </div>
+      <button class="btn grn sm" onclick="resumeGame()">Riprendi →</button>
+    </div>
+    <div class="pot-banner">
+      <div>
+        <div class="pot-label">Montepremi accumulato</div>
+        <div class="pot-big" id="pot-num">0€</div>
+        <div class="pot-info" id="pot-info"></div>
+      </div>
+      <div style="text-align:right">
+        <div class="pot-label">Quota</div>
+        <div style="font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--gold2)" id="cfg-buy-lbl">5€</div>
+        <div class="pot-info" id="cfg-re-lbl">max 2 rientri</div>
+      </div>
+    </div>
+    <div class="tbl-wrap" id="lb-wrap"><div style="padding:14px;text-align:center;color:rgba(255,255,255,.3);font-size:.83rem">Nessuna partita oggi</div></div>
+    <div class="brow" style="width:100%;max-width:500px;justify-content:space-between">
+      <button class="btn out sm" onclick="goSetup()">⚙ Impostazioni</button>
+      <button class="btn gold" onclick="startGame()">▶ Nuova partita</button>
+    </div>
+    <button class="btn red sm w100" style="margin-top:10px;opacity:.5" onclick="resetDay()">🗑 Reset giornata</button>
+  </div>
+
+  <!-- TAB SOLDI -->
+  <div id="tab-soldi" style="display:none;width:100%">
+    <div class="money-big" id="money-big">0€</div>
+    <div class="money-sub" id="money-sub">montepremi totale accumulato</div>
+    <div class="tbl-wrap" id="money-tbl-wrap"></div>
+    <div class="brow w100">
+      <button class="btn grn sm w100" onclick="settleAll()">✓ Segna tutto saldato</button>
+    </div>
+    <button class="btn red sm w100" style="margin-top:8px;opacity:.5" onclick="resetMoney()">🗑 Reset contabilità</button>
+  </div>
+
+  <!-- TAB STORICO -->
+  <div id="tab-storico" style="display:none;width:100%;max-width:500px">
+    <div id="storico-list" style="width:100%"></div>
+  </div>
+</div>
+
+<!-- ═══════════ GAME ═══════════ -->
+<div id="S-game" class="screen">
+  <div style="display:flex;align-items:center;justify-content:space-between;width:100%;max-width:560px;padding:4px 0 10px;flex-wrap:wrap;gap:8px">
+    <div style="display:flex;align-items:center;gap:8px">
+      <button class="btn out sm" onclick="backFromGame()">← Indietro</button>
+      <div style="background:rgba(201,168,76,.14);border:1px solid rgba(201,168,76,.3);border-radius:20px;padding:4px 13px;font-size:.77rem;color:var(--gold2)" id="round-lbl">Mano 1</div>
+    </div>
+    <div class="brow" style="margin:0;gap:7px">
+      <button class="btn out sm" onclick="openRules()">Regole</button>
+      <button class="btn out sm" onclick="openMidGame()">↺ In corso</button>
+      <button class="btn red sm" onclick="endGameConfirm()">Fine partita</button>
+    </div>
+  </div>
+
+  <!-- Scoreboard -->
+  <div class="tbl-wrap" style="max-width:560px">
+    <table>
+      <thead><tr>
+        <th>Giocatore</th><th>Partita</th><th>Giornata</th><th>Quota</th><th class="bar-cell"></th>
+      </tr></thead>
+      <tbody id="sb-body"></tbody>
+    </table>
+  </div>
+
+  <!-- Round panel -->
+  <div class="box" style="max-width:560px">
+    <h3 style="font-family:'Playfair Display',serif;color:var(--gold2);font-size:.95rem;margin-bottom:11px">Registra mano</h3>
+
+    <div style="font-size:.77rem;color:rgba(255,255,255,.5);margin-bottom:7px">Chi ha preso l'ultima mano?</div>
+    <div class="taker-wrap" id="taker-wrap"></div>
+
+    <div style="font-size:.77rem;color:rgba(255,255,255,.5);margin-bottom:8px">
+      Punti presi dagli altri <em style="color:var(--goldm)">(l'ultimo prendente viene calcolato automaticamente)</em>
+    </div>
+    <div class="sgrid" id="sgrid"></div>
+
+    <div class="tcheck" id="tcheck"></div>
+
+    <div class="preview" id="preview" style="display:none">
+      <h4>Punti questa mano</h4>
+      <div class="chips" id="preview-chips"></div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap">
+      <button class="btn sm" style="background:rgba(120,60,180,.25);border:1px solid rgba(160,80,220,.5);color:#cc99ff" onclick="openCappotto()">🃏 Cappotto</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn out sm" onclick="undoRound()">↩ Annulla</button>
+        <button class="btn gold" id="btn-confirm" onclick="confirmRound()" disabled>Conferma mano</button>
+      </div>
+    </div>
+  </div>
+
+  <details class="hist-wrap" style="max-width:560px">
+    <summary>Storico mani</summary>
+    <table class="hist-table">
+      <thead><tr id="hist-head"></tr></thead>
+      <tbody id="hist-body"></tbody>
+    </table>
+  </details>
+</div>
+
+<!-- ═══════════ END ═══════════ -->
+<div id="S-end" class="screen">
+  <div style="width:100%;max-width:500px;padding:2px 0 4px">
+    <button class="btn out sm" onclick="backFromEnd()">← Indietro</button>
+  </div>
+  <div class="logo" style="font-size:1.9rem">Fine Partita</div>
+  <div class="sub" style="margin-bottom:16px">Registra punteggi e vincitore</div>
+
+  <div class="box">
+    <h2>Chi ha vinto?</h2>
+    <div style="font-size:.78rem;color:rgba(255,255,255,.4);margin-bottom:10px">Seleziona 1 o 2 vincitori. Con 2 vincitori il montepremi viene diviso a metà.</div>
+    <div class="wsel-wrap" id="wsel"></div>
+    <div style="font-size:.8rem;padding:9px 12px;background:rgba(201,168,76,.07);border:1px solid rgba(201,168,76,.14);border-radius:6px;color:rgba(255,255,255,.5)" id="pot-split-info"></div>
+  </div>
+
+  <div class="box">
+    <h2>Punteggi finali</h2>
+    <div style="font-size:.77rem;color:rgba(255,255,255,.4);margin-bottom:10px">Inserisci il totale punti preso da ogni giocatore durante la partita.</div>
+    <div id="end-form"></div>
+    <div style="font-size:.77rem;color:rgba(255,255,255,.35);margin-top:5px" id="end-tot-info"></div>
+  </div>
+
+  <div class="brow">
+    <button class="btn out" onclick="skipEnd()">Salta</button>
+    <button class="btn gold" onclick="saveEnd()">Salva partita</button>
+  </div>
+</div>
+
+<!-- CAPPOTTO MODAL -->
+<div class="overlay" id="cappotto-overlay">
+  <div class="modal">
+    <h2>🃏 Cappotto!</h2>
+    <p style="margin-bottom:14px">Chi ha fatto cappotto (preso tutte le carte)?</p>
+    <div class="taker-wrap" id="cappotto-player-sel" style="margin-bottom:16px"></div>
+    <p style="margin-bottom:12px;font-size:.82rem;color:rgba(255,255,255,.55)">Scegli l'effetto del cappotto:</p>
+    <div style="display:flex;flex-direction:column;gap:9px;margin-bottom:18px">
+      <button class="btn sm" id="cap-btn-plus"
+        style="background:rgba(192,57,43,.25);border:1px solid rgba(192,57,43,.5);color:#f99;justify-content:flex-start;text-align:left;white-space:normal;height:auto;padding:10px 14px"
+        onclick="applyCappotto('plus')">
+        <div><strong>+11 agli altri</strong><br><span style="font-size:.75rem;opacity:.7">Tutti gli avversari ricevono +11 punti</span></div>
+      </button>
+      <button class="btn sm" id="cap-btn-minus"
+        style="background:rgba(39,174,96,.2);border:1px solid rgba(39,174,96,.5);color:var(--greenl);justify-content:flex-start;text-align:left;white-space:normal;height:auto;padding:10px 14px"
+        onclick="applyCappotto('minus')">
+        <div><strong>−11 a sé stesso</strong><br><span style="font-size:.75rem;opacity:.7">Chi ha fatto cappotto scala 11 punti dal proprio totale</span></div>
+      </button>
+    </div>
+    <div style="display:flex;justify-content:flex-end">
+      <button class="btn out sm" onclick="closeCappotto()">Annulla</button>
+    </div>
+  </div>
+</div>
+
+<!-- PARTITA IN CORSO MODAL -->
+<div class="overlay" id="midgame-overlay">
+  <div class="modal">
+    <h2>Partita in corso</h2>
+    <p style="margin-bottom:14px">Inserisci i punteggi attuali di ogni giocatore per riprendere una partita già iniziata.</p>
+    <div id="midgame-form"></div>
+    <div style="font-size:.75rem;color:rgba(255,255,255,.35);margin-bottom:14px" id="midgame-info"></div>
+    <div style="display:flex;gap:9px;justify-content:flex-end;flex-wrap:wrap">
+      <button class="btn out sm" onclick="closeMidGame()">Annulla</button>
+      <button class="btn gold sm" onclick="confirmMidGame()">Conferma punteggi</button>
+    </div>
+  </div>
+</div>
+
+<!-- RULES MODAL -->
+<div class="overlay" id="rules-overlay">
+  <div class="modal">
+    <h2>Regole — Vinci Perdi</h2>
+    <div class="rs"><h3>Obiettivo</h3><p>Non prendere mai punti. Chi raggiunge il limite viene eliminato. Vince chi rimane.</p></div>
+    <div class="rs"><h3>Carte (mazzo da 40)</h3><ul><li>Asso — 1 punto</li><li>3, Re, Cavallo, Fante — ⅓ punto ciascuno</li><li>Totale mazzo = 11 punti per mano</li></ul></div>
+    <div class="rs"><h3>Ultima mano</h3><p>Chi prende l'ultima mano riceve automaticamente <strong>11 − somma degli altri</strong>.</p></div>
+    <div class="rs"><h3>Quota e rientri</h3><ul><li>Ogni giocatore paga la quota per giocare.</li><li>Se eliminato può rientrare (max N volte) pagando di nuovo la quota.</li></ul></div>
+    <div class="rs"><h3>Montepremi</h3><p>Il totale delle quote si accumula nel tempo. I vincitori incassano il montepremi alla data X. Con 2 vincitori si dividono a metà.</p></div>
+    <button class="btn gold" style="margin-top:10px" onclick="closeRules()">Capito!</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ─── DATA ───────────────────────────────────────
+const ROUND_TOTAL = 11;
+
+function loadData() {
+  try { const s = localStorage.getItem('vp3'); if (s) return JSON.parse(s); } catch(e) {}
+  return { players: [], buyIn: 5, maxRe: 2, limit: 40, games: [], ledger: {} };
+}
+function saveData() {
+  try { localStorage.setItem('vp3', JSON.stringify(D)); } catch(e) {}
+}
+
+let D = loadData();
+
+const GAME_KEY = 'vp3_game';
+function saveGame() {
+  try { if (G) localStorage.setItem(GAME_KEY, JSON.stringify(G)); else localStorage.removeItem(GAME_KEY); } catch(e) {}
+}
+function loadGame() {
+  try { const s = localStorage.getItem(GAME_KEY); if (s) return JSON.parse(s); } catch(e) {}
+  return null;
+}
+
+let G = loadGame(); // ripristina partita in corso
+let endWinners = [];
+
+// ─── UTILS ──────────────────────────────────────
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function fmt(n) {
+  if (n === undefined || n === null || isNaN(n)) return '0';
+  const r = Math.round(n * 100) / 100;
+  if (r % 1 === 0) return String(r);
+  return r.toFixed(2).replace(/\.?0+$/, '');
+}
+
+let toastT;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('on');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => el.classList.remove('on'), 3000);
+}
+
+function show(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('on'));
+  document.getElementById('S-' + id).classList.add('on');
+}
+
+// ─── SETUP ──────────────────────────────────────
+function initSetup() {
+  const list = document.getElementById('plist');
+  list.innerHTML = '';
+  const names = D.players.length ? D.players : ['Giocatore 1','Giocatore 2','Giocatore 3','Giocatore 4'];
+  names.forEach(n => _addPRow(n));
+  document.getElementById('cfg-limit').value = D.limit || 40;
+  document.getElementById('cfg-buy').value   = D.buyIn || 5;
+  document.getElementById('cfg-re').value    = D.maxRe ?? 2;
+  document.getElementById('back-setup').style.display = D.players.length ? '' : 'none';
+  document.getElementById('btn-resume').style.display = G ? '' : 'none';
+}
+
+function _addPRow(name) {
+  const list = document.getElementById('plist');
+  if (list.children.length >= 10) { toast('Massimo 10 giocatori'); return; }
+  const n = list.children.length + 1;
+  const d = document.createElement('div');
+  d.className = 'prow';
+  d.innerHTML = `<span class="pnum">${n}</span><input type="text" placeholder="Giocatore ${n}" value="${esc(name||'')}" maxlength="20">`;
+  list.appendChild(d);
+}
+
+function addP() { _addPRow(''); }
+function remP() {
+  const list = document.getElementById('plist');
+  if (list.children.length <= 2) { toast('Minimo 2 giocatori'); return; }
+  list.removeChild(list.lastChild);
+}
+
+function goSetup() { initSetup(); show('setup'); }
+
+function backFromGame() {
+  // Torna alla home senza terminare la partita
+  if (confirm('Tornare alla home? La partita rimarrà in corso e potrai riprendere.')) {
+    goHome();
+  }
+}
+
+function backFromEnd() {
+  // Torna alla partita senza salvare
+  if (G) { renderGame(); show('game'); }
+  else goHome();
+}
+
+// Torna alla partita in corso dal setup
+function resumeGame() {
+  if (!G) { toast('Nessuna partita in corso'); return; }
+  renderGame();
+  show('game');
+}
+
+// Apri modal "partita in corso" per aggiornare i punteggi a metà partita
+function openMidGame() {
+  const form = document.getElementById('midgame-form');
+  form.innerHTML = '';
+  G.players.forEach((p, i) => {
+    const row = document.createElement('div');
+    row.className = 'srow';
+    row.style.marginBottom = '9px';
+    const stars = p.reentries > 0 ? '<span style="color:#f99">'+('*'.repeat(p.reentries))+'</span>' : '';
+    row.innerHTML = `<label>${esc(p.name)}${stars}${p.out ? ' <span style="color:#f99;font-size:.7rem">(elim.)</span>' : ''}</label>
+      <input type="number" id="mg-${i}" min="0" max="200" step="0.01" placeholder="pt" value="${fmt(p.score)}">`;
+    form.appendChild(row);
+  });
+  document.getElementById('midgame-info').textContent = 'I punteggi correnti vengono pre-compilati. Modifica solo quelli sbagliati.';
+  document.getElementById('midgame-overlay').classList.add('on');
+}
+
+function closeMidGame() {
+  document.getElementById('midgame-overlay').classList.remove('on');
+}
+
+function confirmMidGame() {
+  G.players.forEach((p, i) => {
+    const inp = document.getElementById('mg-' + i);
+    if (!inp) return;
+    const v = parseFloat(inp.value);
+    if (!isNaN(v) && v >= 0) {
+      p.score = v;
+      // ricalcola lo stato out
+      p.out = v >= G.limit && p.reentries >= G.maxRe;
+    }
+  });
+  // ricalcola active
+  G.active = G.players.map((p, i) => ({ p, i }))
+    .filter(({ p }) => !p.out)
+    .map(({ i }) => i);
+  closeMidGame();
+  saveGame();
+  renderGame();
+  toast('Punteggi aggiornati');
+}
+
+function startGame() {
+  // read player names
+  let names;
+  if (document.getElementById('S-setup').classList.contains('on')) {
+    const inputs = document.querySelectorAll('#plist input');
+    names = [...inputs].map(i => i.value.trim()).filter(Boolean);
+    if (names.length < 2) { toast('Servono almeno 2 giocatori'); return; }
+    D.players  = names;
+    D.limit    = parseInt(document.getElementById('cfg-limit').value) || 40;
+    D.buyIn    = parseFloat(document.getElementById('cfg-buy').value) || 5;
+    D.maxRe    = parseInt(document.getElementById('cfg-re').value) ?? 2;
+    // init ledger for new players
+    names.forEach(n => { if (!D.ledger[n]) D.ledger[n] = { paid: 0, won: 0, settled: 0 }; });
+    saveData();
+  } else {
+    names = D.players;
+    if (!names || names.length < 2) { goSetup(); return; }
+  }
+
+  // Build game state
+  G = {
+    players: names.map(n => ({ name: n, score: 0, out: false, reentries: 0 })),
+    limit:   D.limit,
+    buyIn:   D.buyIn,
+    maxRe:   D.maxRe,
+    round:   1,
+    dealer:  0,
+    history: [],
+    active:  names.map((_, i) => i),
+    taker:   null,
+    mscores: {},
+    paid:    {}
+  };
+
+  // Initial buy-in
+  names.forEach((n, i) => {
+    G.paid[i] = D.buyIn;
+    D.ledger[n].paid += D.buyIn;
+  });
+  saveData(); saveGame();
+
+  renderGame();
+  show('game');
+}
+
+// ─── REENTRY ────────────────────────────────────
+function reenter(idx) {
+  const p = G.players[idx];
+  if (!p.out) return;
+  if (p.reentries >= G.maxRe) { toast('Limite rientri raggiunto'); return; }
+  // Score = punteggio più alto tra i giocatori attivi
+  const maxScore = G.active.length
+    ? Math.max(...G.active.map(i => G.players[i].score))
+    : 0;
+  p.out = false;
+  p.score = maxScore;
+  p.reentries++;
+  G.paid[idx] = (G.paid[idx] || 0) + G.buyIn;
+  D.ledger[p.name].paid += G.buyIn;
+  saveData();
+  saveGame();
+  if (!G.active.includes(idx)) { G.active.push(idx); G.active.sort((a,b)=>a-b); }
+  toast(`${p.name} rientra con ${fmt(maxScore)} pt! (+${fmt(G.buyIn)}€)`);
+  renderGame();
+}
+
+// ─── CAPPOTTO ───────────────────────────────────
+let cappottoPlayer = null;
+
+function openCappotto() {
+  cappottoPlayer = null;
+  const sel = document.getElementById('cappotto-player-sel');
+  sel.innerHTML = '';
+  G.active.forEach(i => {
+    const btn = document.createElement('button');
+    btn.className = 'taker-btn';
+    btn.id = `cap-p-${i}`;
+    btn.textContent = G.players[i].name;
+    btn.onclick = () => {
+      cappottoPlayer = i;
+      document.querySelectorAll('#cappotto-player-sel .taker-btn').forEach(b => b.classList.remove('on'));
+      btn.classList.add('on');
+    };
+    sel.appendChild(btn);
+  });
+  document.getElementById('cappotto-overlay').classList.add('on');
+}
+
+function closeCappotto() {
+  document.getElementById('cappotto-overlay').classList.remove('on');
+  cappottoPlayer = null;
+}
+
+function applyCappotto(mode) {
+  if (cappottoPlayer === null) { toast('Seleziona chi ha fatto cappotto'); return; }
+  const p = G.players[cappottoPlayer];
+
+  if (mode === 'plus') {
+    // +11 a tutti gli altri attivi
+    G.active.forEach(i => {
+      if (i !== cappottoPlayer) G.players[i].score += ROUND_TOTAL;
+    });
+    toast(`Cappotto di ${p.name}: +11 a tutti gli altri!`);
+  } else {
+    // -11 a chi ha fatto cappotto (non scende sotto 0)
+    p.score = Math.max(0, p.score - ROUND_TOTAL);
+    toast(`Cappotto di ${p.name}: −11 punti a sé stesso!`);
+  }
+
+  // Registra nel history
+  G.history.push({
+    round: `${G.round}🃏`,
+    pts: G.players.map((pl, i) => {
+      let v = null;
+      if (G.active.includes(i)) {
+        if (mode === 'plus') v = i === cappottoPlayer ? 0 : ROUND_TOTAL;
+        else v = i === cappottoPlayer ? -ROUND_TOTAL : 0;
+      }
+      return { name: pl.name, v };
+    })
+  });
+
+  // Check eliminations
+  const out = [];
+  G.players.forEach((pl, i) => {
+    if (!pl.out && pl.score >= G.limit) { pl.out = true; out.push(pl.name); }
+  });
+  if (out.length) toast(`Eliminati: ${out.join(', ')}`);
+  G.active = G.active.filter(i => !G.players[i].out);
+
+  closeCappotto();
+  G.round++;
+  G.taker = null; G.mscores = {};
+  if (G.active.length <= 1) { checkEnd(); return; }
+  renderGame();
+}
+
+// ─── ELIMINA GIOCATORE ──────────────────────────
+function eliminaGiocatore(idx) {
+  const p = G.players[idx];
+  if (p.out) return;
+  if (!confirm(`Eliminare ${p.name} dalla partita?`)) return;
+  p.out = true;
+  p.reentries = G.maxRe; // impedisce rientri
+  G.active = G.active.filter(i => i !== idx);
+  saveGame();
+  toast(`${p.name} eliminato`);
+  if (G.active.length <= 1) { checkEnd(); return; }
+  renderGame();
+}
+
+// ─── GAME RENDER ────────────────────────────────
+function renderGame() {
+  document.getElementById('round-lbl').textContent = `Mano ${G.round}`;
+  renderSB();
+  renderRound();
+  renderHist();
+}
+
+function renderSB() {
+  const tbody = document.getElementById('sb-body');
+  tbody.innerHTML = '';
+  G.players.forEach((p, i) => {
+    const pct = Math.min(100, (p.score / G.limit) * 100);
+    let barColor = '#27ae60', rowCls = '', scoreCls = 'safe';
+    if (p.out) { rowCls = 'row-out'; barColor = '#555'; scoreCls = ''; }
+    else if (pct >= 80) { rowCls = 'row-dang'; barColor = '#e74c3c'; scoreCls = 'dang'; }
+    else if (pct >= 55) { rowCls = 'row-warn'; barColor = '#e67e22'; scoreCls = 'warn'; }
+
+    const isDealer = (i === G.dealer && !p.out);
+    const dayPts = getDayScore(p.name);
+    const quota  = G.paid[i] || 0;
+    const canRe  = p.out && p.reentries < G.maxRe;
+    const maxOut = p.out && p.reentries >= G.maxRe;
+
+    const tr = document.createElement('tr');
+    tr.className = rowCls;
+    tr.innerHTML = `
+      <td>${esc(p.name)}
+        ${isDealer ? '<span class="badge badge-gold">Mazziere</span>' : ''}
+        ${p.reentries > 0 ? `<span style="color:#f99;font-size:.85rem;margin-left:2px">${'*'.repeat(p.reentries)}</span>` : ''}
+        ${maxOut ? '<span class="badge badge-red">Elim.</span>' : ''}
+        ${canRe ? `<button class="reb" onclick="reenter(${i})">Rientra +${fmt(G.buyIn)}€</button>` : ''}
+        ${!p.out ? `<button onclick="eliminaGiocatore(${i})" style="background:none;border:none;color:rgba(255,255,255,.18);font-size:.75rem;cursor:pointer;padding:2px 5px;margin-left:4px;border-radius:4px;font-family:inherit" onmouseover="this.style.color='rgba(255,120,120,.6)'" onmouseout="this.style.color='rgba(255,255,255,.18)'">✕</button>` : ''}
+      </td>
+      <td class="${scoreCls}">${fmt(p.score)}</td>
+      <td class="muted">${dayPts > 0 ? fmt(dayPts) : '—'}</td>
+      <td class="muted">${fmt(quota)}€</td>
+      <td class="bar-cell"><div class="bar-wrap"><div class="bar-fill" style="width:${pct}%;background:${barColor}"></div></div></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function getDayScore(name) {
+  const today = new Date().toDateString();
+  return D.games.filter(g => g.dateStr === today)
+    .reduce((sum, g) => { const e = g.scores.find(s => s.name === name); return sum + (e ? e.pts : 0); }, 0);
+}
+
+function renderRound() {
+  if (G.active.length < 2) { checkEnd(); return; }
+
+  // Taker buttons
+  const tw = document.getElementById('taker-wrap');
+  tw.innerHTML = '';
+  G.active.forEach(i => {
+    const btn = document.createElement('button');
+    btn.className = 'taker-btn' + (G.taker === i ? ' on' : '');
+    btn.textContent = G.players[i].name;
+    btn.onclick = () => { G.taker = i; renderRound(); };
+    tw.appendChild(btn);
+  });
+
+  // Score inputs
+  const sg = document.getElementById('sgrid');
+  sg.innerHTML = '';
+  G.active.forEach(i => {
+    if (i === G.taker) return;
+    const p = G.players[i];
+    if (G.mscores[i] === undefined) G.mscores[i] = '';
+    const row = document.createElement('div');
+    row.className = 'srow';
+    row.innerHTML = `<label title="${esc(p.name)}">${esc(p.name)}</label>
+      <input type="number" id="ms-${i}" min="0" max="11" step="0.01"
+        placeholder="pt" value="${G.mscores[i]}"
+        oninput="onMScore(${i},this.value)"
+        onkeydown="if(this.value===''&&event.key==='0'){event.preventDefault();}">`;
+    sg.appendChild(row);
+  });
+
+  // Auto row for taker
+  if (G.taker !== null) {
+    const tp = G.players[G.taker];
+    const row = document.createElement('div');
+    row.className = 'srow srow-auto';
+    row.innerHTML = `<label>${esc(tp.name)} 🃏</label>
+      <span style="min-width:70px;text-align:center;font-size:.86rem;color:var(--gold2)" id="taker-auto">—</span>`;
+    sg.appendChild(row);
+  }
+
+  updateScoreUI();
+}
+
+function onMScore(i, val) {
+  // Block entering 0 — clear the field instead
+  const v = parseFloat(val);
+  if (val !== '' && !isNaN(v) && v === 0) {
+    document.getElementById('ms-' + i).value = '';
+    G.mscores[i] = '';
+  } else {
+    G.mscores[i] = val;
+  }
+  updateScoreUI();
+}
+
+function updateScoreUI() {
+  const taker = G.taker;
+  const tcheck = document.getElementById('tcheck');
+  const confirmBtn = document.getElementById('btn-confirm');
+
+  if (taker === null) {
+    tcheck.textContent = '';
+    tcheck.className = 'tcheck';
+    confirmBtn.disabled = true;
+    document.getElementById('preview').style.display = 'none';
+    return;
+  }
+
+  // Empty fields are treated as 0 (player took no scoring cards)
+  let othersSum = 0;
+  G.active.forEach(i => {
+    if (i === taker) return;
+    const v = parseFloat(G.mscores[i]);
+    othersSum += isNaN(v) ? 0 : v;
+  });
+
+  const takerPts = Math.max(0, ROUND_TOTAL - othersSum);
+  const autoEl = document.getElementById('taker-auto');
+  if (autoEl) autoEl.textContent = `${fmt(takerPts)} pt`;
+
+  const grand = othersSum + takerPts;
+  tcheck.textContent = `Totale: ${fmt(grand)} / ${ROUND_TOTAL} pt ✓`;
+  tcheck.className = 'tcheck ok';
+  confirmBtn.disabled = false; // always enabled once taker is selected
+
+  // Preview
+  const chips = document.getElementById('preview-chips');
+  chips.innerHTML = '';
+  G.active.forEach(i => {
+    const _v = parseFloat(G.mscores[i]); const val = i === taker ? takerPts : (isNaN(_v) ? 0 : _v);
+    const c = document.createElement('div');
+    c.className = 'chip';
+    c.innerHTML = `${esc(G.players[i].name)}: <strong>+${fmt(val)}</strong>${i === taker ? ' 🃏' : ''}`;
+    chips.appendChild(c);
+  });
+  document.getElementById('preview').style.display = 'block';
+}
+
+function computePts() {
+  const taker = G.taker;
+  let othersSum = 0;
+  G.active.forEach(i => { if (i !== taker) { const v = parseFloat(G.mscores[i]); othersSum += isNaN(v) ? 0 : v; } });
+  const takerPts = Math.max(0, ROUND_TOTAL - othersSum);
+  const pts = {};
+  G.active.forEach(i => { pts[i] = i === taker ? takerPts : (parseFloat(G.mscores[i]) || 0); });
+  return pts;
+}
+
+function confirmRound() {
+  const pts = computePts();
+  const active = [...G.active];
+  active.forEach(i => { G.players[i].score += pts[i] || 0; });
+
+  G.history.push({
+    round: G.round,
+    pts: G.players.map((p, i) => ({ name: p.name, v: active.includes(i) ? (pts[i] || 0) : null }))
+  });
+
+  // Check eliminations
+  const out = [];
+  G.players.forEach((p, i) => {
+    if (!p.out && p.score >= G.limit) { p.out = true; out.push(p.name); }
+  });
+  if (out.length) toast(`Superato il limite: ${out.join(', ')}`);
+
+  G.active = G.active.filter(i => !G.players[i].out);
+  if (G.active.length > 0) {
+    do { G.dealer = (G.dealer + 1) % G.players.length; }
+    while (G.players[G.dealer].out);
+  }
+
+  G.round++;
+  G.taker = null;
+  G.mscores = {};
+
+  if (G.active.length <= 1) { checkEnd(); return; }
+  renderGame();
+}
+
+function undoRound() {
+  if (!G.history.length) { toast('Nessuna mano da annullare'); return; }
+  const last = G.history.pop();
+  G.players.forEach((p, i) => {
+    if (last.pts[i].v !== null) { p.score = Math.max(0, p.score - last.pts[i].v); p.out = false; }
+  });
+  G.active = G.players.map((_, i) => i).filter(i => !G.players[i].out);
+  G.round = Math.max(1, G.round - 1);
+  if (G.active.length > 0) {
+    do { G.dealer = (G.dealer - 1 + G.players.length) % G.players.length; }
+    while (G.players[G.dealer].out);
+  }
+  G.taker = null; G.mscores = {};
+  renderGame();
+  toast('Ultima mano annullata');
+}
+
+function renderHist() {
+  const head = document.getElementById('hist-head');
+  const body = document.getElementById('hist-body');
+  head.innerHTML = '<th>Mano</th>' + G.players.map(p => `<th>${esc(p.name.substring(0,7))}</th>`).join('');
+  body.innerHTML = '';
+  G.history.forEach(h => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${h.round}</td>` +
+      h.pts.map(hp => hp.v === null
+        ? `<td style="color:rgba(255,255,255,.2)">—</td>`
+        : `<td class="${hp.v === 0 ? 'hpt0' : 'hpt'}">${hp.v > 0 ? '+' : ''}${fmt(hp.v)}</td>`
+      ).join('');
+    body.appendChild(tr);
+  });
+}
+
+// ─── END GAME ───────────────────────────────────
+function checkEnd() { if (G.active.length <= 1) showEndScreen(); }
+function endGameConfirm() { if (confirm('Terminare la partita?')) showEndScreen(); }
+
+function gamePot() { return Object.values(G.paid).reduce((a, b) => a + b, 0); }
+function globalPot() {
+  let tot = 0;
+  Object.values(D.ledger).forEach(l => { tot += l.paid - l.settled; });
+  return Math.max(0, tot);
+}
+
+function showEndScreen() {
+  endWinners = [];
+
+  // Winner selector
+  const wsel = document.getElementById('wsel');
+  wsel.innerHTML = '';
+  // Suggest auto winner
+  const actives = G.players.filter(p => !p.out);
+  const autoW = (actives.length ? actives : G.players).reduce((a, b) => a.score < b.score ? a : b).name;
+
+  G.players.forEach((p, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'wbtn';
+    btn.id = `wb-${i}`;
+    btn.textContent = p.name + (p.name === autoW ? ' ⭐' : '');
+    btn.onclick = () => toggleWinner(i);
+    wsel.appendChild(btn);
+  });
+
+  updatePotSplitInfo();
+
+  // Score form
+  const form = document.getElementById('end-form');
+  form.innerHTML = '';
+  const sorted = [...G.players].map((p, i) => ({ ...p, idx: i }))
+    .sort((a, b) => { if (!a.out && b.out) return -1; if (a.out && !b.out) return 1; return a.score - b.score; });
+  sorted.forEach(p => {
+    const row = document.createElement('div');
+    row.className = 'srow'; row.style.marginBottom = '8px';
+    row.innerHTML = `<label>${esc(p.name)}</label>
+      <input type="number" id="es-${p.idx}" min="0" step="0.01" placeholder="pt" value="${fmt(p.score)}" oninput="updateEndTot()">`;
+    form.appendChild(row);
+  });
+  updateEndTot();
+  show('end');
+}
+
+function toggleWinner(i) {
+  if (endWinners.includes(i)) {
+    endWinners = endWinners.filter(x => x !== i);
+  } else {
+    if (endWinners.length >= 2) { toast('Max 2 vincitori'); return; }
+    endWinners.push(i);
+  }
+  G.players.forEach((_, j) => {
+    const btn = document.getElementById(`wb-${j}`);
+    if (!btn) return;
+    if (endWinners.length === 1 && endWinners[0] === j) btn.className = 'wbtn on1';
+    else if (endWinners.length === 2 && endWinners.includes(j)) btn.className = 'wbtn on2';
+    else btn.className = 'wbtn';
+  });
+  updatePotSplitInfo();
+}
+
+function updatePotSplitInfo() {
+  const gp = gamePot(), gl = globalPot();
+  const info = document.getElementById('pot-split-info');
+  if (!endWinners.length) {
+    info.textContent = `Montepremi partita: ${fmt(gp)}€ — Montepremi globale: ${fmt(gl)}€`;
+  } else if (endWinners.length === 1) {
+    info.innerHTML = `<strong>${esc(G.players[endWinners[0]].name)}</strong> vince <strong>${fmt(gp)}€</strong> (questa partita). Globale: <strong>${fmt(gl)}€</strong>`;
+  } else {
+    const names = endWinners.map(i => G.players[i].name);
+    info.innerHTML = `<strong>${names.map(esc).join(' & ')}</strong> vincono <strong>${fmt(gp/2)}€</strong> a testa. Globale: <strong>${fmt(gl)}€</strong>`;
+  }
+}
+
+function updateEndTot() {
+  const inputs = document.querySelectorAll('[id^="es-"]');
+  let tot = 0; inputs.forEach(inp => { const v = parseFloat(inp.value); if (!isNaN(v)) tot += v; });
+  document.getElementById('end-tot-info').textContent = `Totale: ${fmt(tot)} pt`;
+}
+
+function saveEnd() {
+  if (!endWinners.length) { toast('Seleziona almeno un vincitore'); return; }
+
+  const inputs = document.querySelectorAll('[id^="es-"]');
+  const scores = [];
+  inputs.forEach(inp => {
+    const idx = parseInt(inp.id.replace('es-', ''));
+    scores.push({ name: G.players[idx].name, pts: parseFloat(inp.value) || 0 });
+  });
+
+  const gp = gamePot();
+  const winnerNames = endWinners.map(i => G.players[i].name);
+  const perW = gp / winnerNames.length;
+
+  winnerNames.forEach(n => {
+    if (!D.ledger[n]) D.ledger[n] = { paid: 0, won: 0, settled: 0 };
+    D.ledger[n].won += perW;
+  });
+
+  const today = new Date().toDateString();
+  D.games.push({
+    id: D.games.length + 1,
+    dateStr: today,
+    date: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+    dayLabel: new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'short' }),
+    scores, winners: winnerNames, pot: gp, perW,
+    pdata: G.players.map((p, i) => ({ name: p.name, reentries: p.reentries, quota: G.paid[i] || G.buyIn }))
+  });
+  D.players = G.players.map(p => p.name);
+  G = null;
+  saveData(); saveGame();
+  toast(`Salvato! ${winnerNames.length === 1 ? 'Vincitore' : 'Vincitori'}: ${winnerNames.join(' & ')}`);
+  goHome();
+}
+
+function skipEnd() { goHome(); }
+
+// ─── HOME ───────────────────────────────────────
+let curTab = 'giornata';
+
+function goHome() {
+  if (!D.players.length) { goSetup(); return; }
+  switchTab('giornata');
+  show('home');
+}
+
+function switchTab(tab) {
+  curTab = tab;
+  ['giornata','soldi','storico'].forEach(t => {
+    document.getElementById('tab-' + t).style.display = t === tab ? '' : 'none';
+  });
+  const tabs = document.querySelectorAll('#home-tabs .tab');
+  ['giornata','soldi','storico'].forEach((t, i) => tabs[i].classList.toggle('on', t === tab));
+  if (tab === 'giornata') renderGiornata();
+  if (tab === 'soldi')    renderSoldi();
+  if (tab === 'storico')  renderStorico();
+}
+
+function renderGiornata() {
+  document.getElementById('home-day-label').textContent =
+    new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  // Banner partita in corso
+  const banner = document.getElementById('inprogress-banner');
+  if (G) {
+    const actives = G.players.filter(p=>!p.out).map(p=>p.name).join(', ');
+    document.getElementById('inprogress-info').textContent = \`Mano \${G.round} — Giocatori: \${actives}\`;
+    banner.style.display = 'flex';
+  } else {
+    banner.style.display = 'none';
+  }
+  document.getElementById('pot-num').textContent = fmt(globalPot()) + '€';
+  document.getElementById('cfg-buy-lbl').textContent = fmt(D.buyIn || 5) + '€/partita';
+  document.getElementById('cfg-re-lbl').textContent = `max ${D.maxRe ?? 2} rientri`;
+
+  const totalGames = D.games.length;
+  const totalPaid  = Object.values(D.ledger).reduce((a, l) => a + l.paid, 0);
+  document.getElementById('pot-info').textContent = `${totalGames} partite totali • ${fmt(totalPaid)}€ versati`;
+
+  const today = new Date().toDateString();
+  const todayGames = D.games.filter(g => g.dateStr === today);
+  const totals = {}, wins = {};
+  D.players.forEach(n => { totals[n] = 0; wins[n] = 0; });
+  todayGames.forEach(g => {
+    g.scores.forEach(s => { totals[s.name] = (totals[s.name] || 0) + s.pts; });
+    (g.winners || []).forEach(n => { wins[n] = (wins[n] || 0) + 1; });
+  });
+  const sorted = D.players.map(n => ({ name: n, tot: totals[n] || 0, wins: wins[n] || 0 })).sort((a, b) => a.tot - b.tot);
+  const lbw = document.getElementById('lb-wrap');
+  if (!todayGames.length) {
+    lbw.innerHTML = '<div style="padding:14px;text-align:center;color:rgba(255,255,255,.3);font-size:.83rem">Nessuna partita oggi</div>';
+  } else {
+    const maxT = Math.max(...sorted.map(x => x.tot), 1);
+    lbw.innerHTML = `<table><thead><tr><th>#</th><th>Giocatore</th><th>Punti oggi</th><th>Vinte</th></tr></thead><tbody>
+      ${sorted.map((p, i) => {
+        const pct = Math.min(100, (p.tot / maxT) * 100);
+        const cls = pct < 40 ? 'safe' : pct < 70 ? 'warn' : 'dang';
+        return `<tr><td class="muted">${i+1}</td><td>${esc(p.name)}${p.wins > 0 ? `<span class="badge badge-gold">🏆${p.wins}</span>` : ''}</td><td class="${cls}">${fmt(p.tot)}</td><td class="muted">${todayGames.length}</td></tr>`;
+      }).join('')}</tbody></table>`;
+  }
+}
+
+function renderSoldi() {
+  const gp = globalPot();
+  const totalPaid = Object.values(D.ledger).reduce((a, l) => a + l.paid, 0);
+  const totalWon  = Object.values(D.ledger).reduce((a, l) => a + l.won,  0);
+  document.getElementById('money-big').textContent = fmt(gp) + '€';
+  document.getElementById('money-sub').textContent = `Versati: ${fmt(totalPaid)}€ — Vinti: ${fmt(totalWon)}€`;
+
+  const players = D.players.length ? D.players : Object.keys(D.ledger);
+  if (!players.length) {
+    document.getElementById('money-tbl-wrap').innerHTML = '<div style="padding:14px;text-align:center;color:rgba(255,255,255,.3)">Nessun dato</div>';
+    return;
+  }
+  const rows = players.map(n => {
+    const l = D.ledger[n] || { paid: 0, won: 0, settled: 0 };
+    return { name: n, paid: l.paid, won: l.won, settled: l.settled, netto: l.won - l.paid };
+  }).sort((a, b) => b.netto - a.netto);
+
+  document.getElementById('money-tbl-wrap').innerHTML = `<table>
+    <thead><tr><th>Giocatore</th><th>Versato</th><th>Vinto</th><th>Saldo</th><th></th></tr></thead>
+    <tbody>${rows.map(r => {
+      const cls = r.netto > 0 ? 'saldo-pos' : r.netto < 0 ? 'saldo-neg' : 'saldo-zer';
+      const sign = r.netto > 0 ? '+' : '';
+      const isSett = r.settled >= r.paid && r.paid > 0;
+      return `<tr>
+        <td>${esc(r.name)}</td>
+        <td class="muted">${fmt(r.paid)}€</td>
+        <td class="muted">${fmt(r.won)}€</td>
+        <td class="${cls}">${sign}${fmt(r.netto)}€</td>
+        <td><button class="settle-btn${isSett ? ' settled' : ''}" onclick="toggleSettle('${esc(r.name)}')">${isSett ? 'Saldato' : 'Salda'}</button></td>
+      </tr>`;
+    }).join('')}</tbody></table>`;
+}
+
+function toggleSettle(name) {
+  if (!D.ledger[name]) return;
+  const l = D.ledger[name];
+  l.settled = l.settled >= l.paid ? 0 : l.paid;
+  saveData(); renderSoldi();
+  toast(l.settled > 0 ? `${name}: saldato` : `${name}: saldo rimosso`);
+}
+function settleAll() {
+  D.players.forEach(n => { if (D.ledger[n]) D.ledger[n].settled = D.ledger[n].paid; });
+  saveData(); renderSoldi(); toast('Tutti saldati');
+}
+function resetMoney() {
+  if (!confirm('Azzerare la contabilità?')) return;
+  D.players.forEach(n => { if (D.ledger[n]) D.ledger[n] = { paid: 0, won: 0, settled: 0 }; });
+  saveData(); renderSoldi(); toast('Contabilità azzerata');
+}
+
+function renderStorico() {
+  const list = document.getElementById('storico-list');
+  if (!D.games.length) {
+    list.innerHTML = '<div style="color:rgba(255,255,255,.3);text-align:center;padding:14px;font-size:.82rem">Nessuna partita completata</div>';
+    return;
+  }
+  list.innerHTML = [...D.games].reverse().map(g => {
+    const chips = g.scores.map(s => {
+      const isW = (g.winners || []).includes(s.name);
+      return `<span class="sc-chip${isW ? ' w' : ''}"><strong>${esc(s.name)}</strong> ${fmt(s.pts)}pt</span>`;
+    }).join('');
+    const wl = g.winners && g.winners.length ? '🏆 ' + g.winners.map(esc).join(' & ') : '';
+    return `<div class="sc">
+      <div class="sc-top">
+        <span class="sc-num">Partita ${g.id} <span style="font-size:.67rem;color:rgba(255,255,255,.28)">${g.dayLabel||''} ${g.date||''}</span></span>
+        <span class="sc-win">${wl}</span>
+      </div>
+      <div class="sc-chips">${chips}</div>
+      <div class="sc-pot">Montepremi: ${fmt(g.pot||0)}€${g.winners&&g.winners.length>1?` (${fmt(g.perW||0)}€ a testa)`:''}</div>
+    </div>`;
+  }).join('');
+}
+
+function resetDay() {
+  if (!confirm('Azzerare le partite di oggi? La contabilità rimarrà.')) return;
+  const today = new Date().toDateString();
+  D.games.filter(g => g.dateStr === today).forEach(g => {
+    (g.winners || []).forEach(n => { if (D.ledger[n]) D.ledger[n].won -= g.perW || 0; });
+    (g.pdata || []).forEach(p => { if (D.ledger[p.name]) D.ledger[p.name].paid -= p.quota || D.buyIn; });
+  });
+  D.games = D.games.filter(g => g.dateStr !== today);
+  saveData(); renderGiornata(); toast('Giornata azzerata');
+}
+
+// ─── RULES ──────────────────────────────────────
+function openRules()  { document.getElementById('rules-overlay').classList.add('on'); }
+function closeRules() { document.getElementById('rules-overlay').classList.remove('on'); }
+
+// ─── INIT ───────────────────────────────────────
+if (D.players.length) {
+  renderGiornata();
+  show('home');
+  document.getElementById('tab-giornata').style.display = '';
+  document.getElementById('tab-soldi').style.display = 'none';
+  document.getElementById('tab-storico').style.display = 'none';
+} else {
+  initSetup();
+  show('setup');
+}
+</script>
+</body>
+</html>
